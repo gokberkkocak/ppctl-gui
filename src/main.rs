@@ -2,7 +2,6 @@ use eframe::egui::{self, Key};
 
 use core::fmt::Display;
 use core::panic;
-use std::error::Error;
 use std::process::Command;
 
 const POWER_SAVER: &str = "power-saver";
@@ -10,7 +9,6 @@ const BALANCED: &str = "balanced";
 const PERFORMANCE: &str = "performance";
 
 const PPCTL_CMD: &str = "powerprofilesctl";
-
 enum PowerProfile {
     PowerSaver,
     Balanced,
@@ -36,6 +34,12 @@ impl From<u8> for PowerProfile {
             2 => PowerProfile::Performance,
             _ => panic!("cannot"),
         }
+    }
+}
+
+impl Default for PowerProfile {
+    fn default() -> Self {
+        PowerProfile::init()
     }
 }
 
@@ -67,42 +71,50 @@ impl PowerProfile {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // gui options
+#[derive(Default)]
+struct PPCtlGui {
+    state: PowerProfile,
+}
+
+impl eframe::App for PPCtlGui {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let cp = egui::CentralPanel::default();
+        let mut state_u8 = self.state.to_u8();
+        cp.show(ctx, |ui| {
+            let slider =
+                egui::Slider::new(&mut state_u8, 0..=2).custom_formatter(|s, _| match s as u64 {
+                    0 => POWER_SAVER.to_owned(),
+                    1 => BALANCED.to_owned(),
+                    2 => PERFORMANCE.to_owned(),
+                    _ => "".to_owned(),
+                });
+            ui.add(slider);
+            if self.state.to_u8() != state_u8 {
+                self.state = state_u8.into();
+                let _output = Command::new(PPCTL_CMD)
+                    .args(["set", &format!("{}", self.state)])
+                    .output()
+                    .expect("failed to execute process");
+                println!("Profile changed: {}", self.state);
+            }
+            if ctx.input(|i| i.key_pressed(Key::Escape)) {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        });
+    }
+}
+
+fn main() -> eframe::Result<(), eframe::Error> {
+    // options
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_app_id(env!("CARGO_CRATE_NAME"))
             .with_inner_size([200.0, 35.0]),
         ..Default::default()
     };
-
-    // State
-    let mut state = PowerProfile::init();
-    let mut state_u8 = state.to_u8();
-
-    eframe::run_simple_native("ppctl-gui", options, move |ctx, _frame| {
-        let cp = egui::CentralPanel::default();
-        cp.show(ctx, |ui| {
-            let slider =
-                egui::Slider::new(&mut state_u8, 0..=2).custom_formatter(|s, _| match s as u64 {
-                    0 => "power-saver".to_owned(),
-                    1 => "balanced".to_owned(),
-                    2 => "performance".to_owned(),
-                    _ => "".to_owned(),
-                });
-            ui.add(slider);
-            if state.to_u8() != state_u8 {
-                state = state_u8.into();
-                let _output = Command::new(PPCTL_CMD)
-                    .args(["set", &format!("{}", state)])
-                    .output()
-                    .expect("failed to execute process");
-                println!("Profile changed: {}", state);
-            }
-            if ctx.input(|i| i.key_pressed(Key::Escape)) {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        });
-    })?;
-    Ok(())
+    eframe::run_native(
+        env!("CARGO_CRATE_NAME"),
+        options,
+        Box::new(|_cc| Box::<PPCtlGui>::default()),
+    )
 }
