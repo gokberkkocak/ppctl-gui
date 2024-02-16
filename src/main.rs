@@ -34,7 +34,7 @@ impl From<u8> for PowerProfile {
             0 => PowerProfile::PowerSaver,
             1 => PowerProfile::Balanced,
             2 => PowerProfile::Performance,
-            _ => panic!("cannot")
+            _ => panic!("cannot"),
         }
     }
 }
@@ -70,7 +70,9 @@ impl PowerProfile {
 fn main() -> Result<(), Box<dyn Error>> {
     // gui options
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([200.0, 35.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_app_id(env!("CARGO_CRATE_NAME"))
+            .with_inner_size([200.0, 35.0]),
         ..Default::default()
     };
 
