@@ -1,4 +1,4 @@
-use eframe::egui::{self};
+use eframe::egui::{self, Key};
 
 use core::fmt::Display;
 use core::panic;
@@ -98,6 +98,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .output()
                     .expect("failed to execute process");
                 println!("Profile changed: {}", state);
+            }
+            if ctx.input(|i| i.key_pressed(Key::Escape)) {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
             }
         });
     })?;
