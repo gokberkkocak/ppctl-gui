@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
 
-const APP_ID: &str = "org.goksh.ppctl_gui";
+const APP_ID: &str = "com.goksh.ppctl_gui";
 
 const POWER_SAVER: &str = "power-saver";
 const BALANCED: &str = "balanced";
