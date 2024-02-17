@@ -1,14 +1,21 @@
-use eframe::egui::{self, Key};
+use gtk4::glib::property::PropertySet;
+use gtk4::{self, glib, Adjustment, Application, ApplicationWindow};
+use gtk4::{prelude::*, Scale};
 
 use core::fmt::Display;
-use core::panic;
+use std::cell::RefCell;
 use std::process::Command;
+use std::rc::Rc;
+
+const APP_ID: &str = "com.goksh.ppctl_gui";
 
 const POWER_SAVER: &str = "power-saver";
 const BALANCED: &str = "balanced";
 const PERFORMANCE: &str = "performance";
 
 const PPCTL_CMD: &str = "powerprofilesctl";
+
+#[derive(Clone, Copy)]
 enum PowerProfile {
     PowerSaver,
     Balanced,
@@ -26,12 +33,12 @@ impl From<String> for PowerProfile {
     }
 }
 
-impl From<u8> for PowerProfile {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => PowerProfile::PowerSaver,
-            1 => PowerProfile::Balanced,
-            2 => PowerProfile::Performance,
+impl From<f64> for PowerProfile {
+    fn from(x: f64) -> Self {
+        match x {
+            x if (-0.1..=0.1).contains(&x) => PowerProfile::PowerSaver,
+            x if (0.9..=1.1).contains(&x) => PowerProfile::Balanced,
+            x if (1.9..=2.1).contains(&x) => PowerProfile::Performance,
             _ => panic!("cannot"),
         }
     }
@@ -62,59 +69,89 @@ impl PowerProfile {
         let stdout = String::from_utf8(output.stdout).expect("cannot");
         stdout.into()
     }
-    fn to_u8(&self) -> u8 {
+    fn to_f64(self) -> f64 {
         match self {
-            PowerProfile::PowerSaver => 0,
-            PowerProfile::Balanced => 1,
-            PowerProfile::Performance => 2,
+            PowerProfile::PowerSaver => 0.0,
+            PowerProfile::Balanced => 1.0,
+            PowerProfile::Performance => 2.0,
         }
     }
 }
 
-#[derive(Default)]
-struct PPCtlGui {
-    state: PowerProfile,
+fn build_ui(app: &Application) {
+    // Build slider
+    let slider = Scale::builder()
+        .orientation(gtk4::Orientation::Horizontal)
+        .digits(0)
+        .can_focus(false)
+        .adjustment(
+            &Adjustment::builder()
+                .value(1.0)
+                .lower(0.0)
+                .upper(2.0)
+                .step_increment(1.0)
+                .page_increment(0.0)
+                .page_size(0.0)
+                .build(),
+        )
+        .round_digits(0)
+        .margin_start(30)
+        .margin_end(30)
+        .build();
+    // init slider value
+    let power_profile: PowerProfile = PowerProfile::init();
+    slider.set_value(power_profile.to_f64());
+    let state = Rc::new(RefCell::new(power_profile));
+    // Add slider marks
+    slider.add_mark(0.0, gtk4::PositionType::Bottom, Some(POWER_SAVER));
+    slider.add_mark(1.0, gtk4::PositionType::Bottom, Some(BALANCED));
+    slider.add_mark(2.0, gtk4::PositionType::Bottom, Some(PERFORMANCE));
+
+    // capture value change via state change
+    slider.connect_state_flags_changed(move |slider, _state| {
+        let state_as_f64 = state.as_ref().borrow().to_f64();
+        if state_as_f64 != slider.value() {
+            state.set(slider.value().into());
+            let _output = Command::new(PPCTL_CMD)
+                .args(["set", &format!("{}", state.as_ref().borrow())])
+                .output()
+                .expect("failed to execute process");
+            println!("Profile changed: {}", state.as_ref().borrow());
+        }
+    });
+
+    // Create a window
+    let window = ApplicationWindow::builder()
+        .application(app)
+        .title("Power Profile Daemon GUI")
+        .child(&slider)
+        .build();
+    window.set_default_size(200, 50);
+
+    // Escape key handle
+    let event_controller = gtk4::EventControllerKey::new();
+    event_controller.connect_key_pressed(|_, key, _, _| {
+        match key {
+            gtk4::gdk::Key::Escape => {
+                std::process::exit(0);
+            }
+            _ => (),
+        }
+        glib::Propagation::Proceed
+    });
+    window.add_controller(event_controller);
+
+    // Present window
+    window.present();
 }
 
-impl eframe::App for PPCtlGui {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let cp = egui::CentralPanel::default();
-        let mut state_u8 = self.state.to_u8();
-        cp.show(ctx, |ui| {
-            let slider =
-                egui::Slider::new(&mut state_u8, 0..=2).custom_formatter(|s, _| match s as u64 {
-                    0 => POWER_SAVER.to_owned(),
-                    1 => BALANCED.to_owned(),
-                    2 => PERFORMANCE.to_owned(),
-                    _ => "".to_owned(),
-                });
-            ui.add(slider);
-            if self.state.to_u8() != state_u8 {
-                self.state = state_u8.into();
-                let _output = Command::new(PPCTL_CMD)
-                    .args(["set", &format!("{}", self.state)])
-                    .output()
-                    .expect("failed to execute process");
-                println!("Profile changed: {}", self.state);
-            }
-            if ctx.input(|i| i.key_pressed(Key::Escape)) {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        });
-    }
-}
+fn main() -> glib::ExitCode {
+    // Create a new application
+    let app = Application::builder().application_id(APP_ID).build();
 
-fn main() -> eframe::Result<(), eframe::Error> {
-    // options
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_app_id(env!("CARGO_CRATE_NAME"))
-            .with_inner_size([200.0, 35.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
-        env!("CARGO_CRATE_NAME"),
-        options,
-        Box::new(|_cc| Box::<PPCtlGui>::default()),
-    )
+    // Connect to "activate" signal of `app`
+    app.connect_activate(build_ui);
+
+    // Run the application
+    app.run()
 }

@@ -31,9 +31,7 @@ Example for 1080p display:
 ```toml
 for_window [app_id="ppctl_gui"] {
     floating enable;
-    resize set width 200;
-    resize set height 50;
-    move right 857; # (1920 - 200)/2 - 3
+    move right 802; # (1920 - 310)/2 - 3
     move down 500; # (1080 - 50)/2 - 15
 }
 
