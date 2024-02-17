@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 eframe = "0.26"
+gtk4 = "0.8"
