@@ -31,7 +31,7 @@ Example for 1080p display:
 ```toml
 for_window [app_id="ppctl_gui"] {
     floating enable;
-    move right 802; # (1920 - 310)/2 - 3
+    move right 792; # (1920 - 330)/2 - 3
     move down 500; # (1080 - 50)/2 - 15
 }
 

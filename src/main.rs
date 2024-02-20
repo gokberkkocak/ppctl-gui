@@ -95,8 +95,8 @@ fn build_ui(app: &Application) {
                 .build(),
         )
         .round_digits(0)
-        .margin_start(30)
-        .margin_end(30)
+        .margin_start(40)
+        .margin_end(40)
         .build();
     // init slider value
     let power_profile: PowerProfile = PowerProfile::init();
